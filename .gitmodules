@@ -1,6 +1,0 @@
-[submodule "components/msg-core/msg-core"]
-	path = components/msg-core/msg-core
-	url = https://github.com/papawattu/msg-core.git
-[submodule "components/phev-core/phev-core"]
-	path = components/phev-core/phev-core
-	url = https://github.com/papawattu/phev-core.git
