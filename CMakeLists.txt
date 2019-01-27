@@ -4,3 +4,5 @@ cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(phev-http-esp)
+
+set(COMPONENT_REQUIRES "phev-core spiffs esp_http_server nvs_flash")

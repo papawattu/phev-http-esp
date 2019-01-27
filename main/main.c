@@ -17,6 +17,7 @@
 #include <sys/param.h>
 
 #include <esp_http_server.h>
+#include "phev_service.h"
 
 /* A simple example that demonstrates how to create GET and POST
  * handlers for the web server.
@@ -273,4 +274,16 @@ void app_main()
     ESP_ERROR_CHECK(nvs_flash_init());
     initialise_wifi(&server);
     initialise_spiffs();
+
+    phevServiceSettings_t settings = {
+        .in = NULL,
+        .out = NULL,
+        .mac = NULL, 
+        .registerDevice = false,
+        .eventHandler = NULL,
+        .errorHandler = NULL,
+        .yieldHandler = NULL,    
+    };
+ 
+    phevServiceCtx_t * ctx = phev_service_create(settings);
 }
