@@ -6,5 +6,5 @@ set(COMPONENT_SRCS "phev-core/src/phev_register.c"
     "phev-core/src/phev_model.c"
 )
 
-set(COMPONENT_REQUIRES "msg-core")
+set(COMPONENT_REQUIRES "msg-core" "json")
 register_component()
