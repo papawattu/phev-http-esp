@@ -1,0 +1,34 @@
+{
+  "status": {
+    "status": {
+      "battery": {
+        "soc": 59,
+        "charging": true,
+        "chargeType": null,
+        "remaining": 90
+      },
+      "syncTime": 11
+    }
+  },
+  "operation": {
+    "operation": {
+      "aircon": "on"
+    }
+  },
+  "config": {
+    "config": {
+      "email": "me@me.com",
+      "carConnection": {
+        "ssid": "REMOTEcccccc",
+        "password": "cccc123456",
+        "host": "192.168.8.46",
+        "port": 8080
+      },
+      "pppConnection": {
+        "user": "eesecure",
+        "password": "secure",
+        "apn": "everywhere"
+      }
+    }
+  }
+}
