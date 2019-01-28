@@ -41,7 +41,11 @@ class BatteryView extends Component {
 
     componentDidMount() {
         this.batterySub = this.battery
-            .subscribe(data => this.setState(data))
+            .subscribe(data => 
+                {
+                    this.setState(data.status.battery)
+                })
+                
     }
 
     componentWillUnmount() {
