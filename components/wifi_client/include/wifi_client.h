@@ -13,6 +13,6 @@ void wifi_conn_init(const char * wifiSSID, const char * wifiPassword, const bool
 void wifi_conn_initAndWait(const char * wifiSSID, const char * wifiPassword, const bool setPPPdefault);
 void wifi_conn_initStationAndWait(const char * wifiSSID, const char * wifiPassword, const bool setPPPdefault);
 
-void wifi_client_setup(void);
+void wifi_client_setup(void *);
 void wifi_ap_init(void * arg);
 #endif

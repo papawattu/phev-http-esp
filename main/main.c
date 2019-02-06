@@ -21,6 +21,7 @@
 #include <esp_http_server.h>
 #include "phev_service.h"
 #include "phev_setup.h"
+#include "captdns.h"
 
 #include "tcp_client.h"
 #include "wifi_client.h"
@@ -154,6 +155,9 @@ esp_err_t phev_http_post_config_handler(httpd_req_t *req)
     {
         LOG_D(TAG, "SSID %s", (*details)->wifi.ssid);
         LOG_D(TAG, "Password %s", (*details)->wifi.password);
+        LOG_D(TAG, "Host %s", (*details)->host);
+        LOG_D(TAG, "Port %d", (*details)->port);
+        
         wifi_conn_initStationAndWait((*details)->wifi.ssid, (*details)->wifi.password, false);
         httpd_resp_set_type(req, MIME_TYPE_JSON);
         httpd_resp_send(req, OK, strlen(OK));
@@ -201,8 +205,8 @@ esp_err_t phev_http_connect_handler(httpd_req_t *req)
     const uint8_t mac[] = {0,0,0,0,0,0};
     
     connectionDetails_t * details = (connectionDetails_t *)  req->user_ctx;
-    
-    LOG_I(TAG, "Sent response");
+
+    LOG_I(TAG,"host %s port %d",details->host,details->port);
 
     serviceCtx = createServiceCtx(req->handle, mac, false, details->host,details->port);
     
@@ -210,6 +214,8 @@ esp_err_t phev_http_connect_handler(httpd_req_t *req)
     
     httpd_resp_set_type(req, MIME_TYPE_JSON);
     httpd_resp_send(req, OK, strlen(OK));
+
+    LOG_I(TAG, "Sent response");
 
     return ESP_OK;
 }
@@ -289,6 +295,20 @@ esp_err_t phev_http_get_handler(httpd_req_t *req)
     httpd_resp_send_chunk(req, buffer, 0);
     fclose(f);
 
+    return ESP_OK;
+}
+
+esp_err_t phev_http_captdns_handler(httpd_req_t *req)
+{
+
+    //const static char http_header_redirect_to_setup[] = "HTTP/1.1 302 Found\r\nContent-Type: text/plain\r\nContent-length: 0\r\nLocation: http://setup.yourdevice.com/\r\nConnection: close\r\n\r\n";
+    
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Location", "http://phevremote.com/index.html");
+    
+    httpd_resp_send(req, "\r\n", 2);
+    
     return ESP_OK;
 }
 esp_err_t phev_http_root_handler(httpd_req_t *req)
@@ -488,6 +508,15 @@ void createHandlers(httpd_handle_t server, connectionDetails_t * * details)
 
     httpd_register_uri_handler(server, &phev_http_post_config);
 
+    httpd_uri_t phev_http_captdns = {
+        .uri = "/generate_204",
+        .method = HTTP_GET,
+        .handler = phev_http_captdns_handler,
+        .user_ctx = NULL,
+    };
+
+    httpd_register_uri_handler(server, &phev_http_captdns);
+
 }
 
 int msg_http_connect(messagingClient_t *client)
@@ -538,6 +567,7 @@ int msg_http_connect(messagingClient_t *client)
     else
     {
         LOG_E(TAG, "Server not started");
+        client->connected = 0;
         return -1;
     }
 }
@@ -665,19 +695,28 @@ void app_main()
 
     ESP_ERROR_CHECK(nvs_flash_init());
     tcpip_adapter_init();
-    wifi_client_setup();
-
-    main_event_group = xEventGroupCreate();
-    //wifi_conn_initAndWait("REMOTE45cfsc","fhcm852767",false);
-
-    wifi_ap_init(NULL);
-
+    tcpip_adapter_dhcps_stop(TCPIP_ADAPTER_IF_AP);
+    tcpip_adapter_ip_info_t ip_info;
+    IP4_ADDR(&ip_info.ip,1,2,3,4);
+    IP4_ADDR(&ip_info.gw,1,2,3,4);
+    IP4_ADDR(&ip_info.netmask,255,255,255,0);
+    tcpip_adapter_set_ip_info(TCPIP_ADAPTER_IF_AP, &ip_info);
+    tcpip_adapter_dhcps_start(TCPIP_ADAPTER_IF_AP);
+    
     LOG_I(TAG, "Init SPIFFS");
     initialise_spiffs();
-
     connectionDetails_t * details;
-
+    
     httpd_handle_t server = start_webserver(&details);
+    
+    wifi_client_setup(server);
+
+    main_event_group = xEventGroupCreate();
+    
+    wifi_ap_init(server);
+
+    captdnsInit();
+
 
     xEventGroupWaitBits(main_event_group, CONNECTED_BIT,
                         false, true, portMAX_DELAY);

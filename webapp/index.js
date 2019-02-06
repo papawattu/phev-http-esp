@@ -2,9 +2,12 @@ import './style'
 import { Component } from 'preact'
 import Config from './components/config'
 
+
+const API_PREFIX = '/api'
+
 const Status = props => {
 	const statusClick = () => {
-		fetch('/status', {
+		fetch(API_PREFIX + '/status', {
 			method : 'GET',
 			headers : {
 				'Accept' : 'application/json',
@@ -20,20 +23,20 @@ export default class App extends Component {
 	constructor() {
 		super()
 		this.setState({ soc : undefined })
-		this.wifiUpdate = wifi => {
-			console.log(`SSID ${wifi.ssid} Password ${wifi.password}`)
-			fetch('/config', {
+		this.configUpdate = config => {
+			console.log(`SSID ${config.wifi.ssid} Password ${config.wifi.password} Host ${config.host} Port ${config.port}`)
+			fetch(API_PREFIX + '/config', {
 				method : 'POST',
 				headers : {
 					'Accept' : 'application/json',
 					'Content-Type' : 'application/json'
 				},
-				body : JSON.stringify({ carConnection : { ssid : wifi.ssid, password : wifi.password}})
-			}).then(response => (response.ok ? alert("Hello") : alert("Error")))
+				body : JSON.stringify({ carConnection : { ssid : config.wifi.ssid, password : config.wifi.password, host : config.host, port : config.port}})
+			}).then(response => (response.ok ? alert("Connected to Wifi") : alert("Error")))
 		}
 		this.sendRegister = () => {
 			console.log('Register')
-			fetch('/register', {
+			fetch(API_PREFIX + '/register', {
 				method : 'POST',
 				headers : {
 					'Accept' : 'application/json',
@@ -45,7 +48,7 @@ export default class App extends Component {
 	render() {
 		const AirCon = () => {
 			const clickHandler = () => {
-				fetch('/operation', {
+				fetch(API_PREFIX + '/operation', {
 					method : 'POST',
 					headers : {
 						'Accept' : 'application/json',
@@ -56,11 +59,23 @@ export default class App extends Component {
 			}
 			return <button onClick={clickHandler}>Air Conditioning On</button>
 		}
-		
-		const config = { config : { carConnection : { ssid: 'REMOTE45cfsc', password : 'fhcm852767'} } }	
+		const HeadLights = () => {
+			const clickHandler = () => {
+				fetch(API_PREFIX + '/operation', {
+					method : 'POST',
+					headers : {
+						'Accept' : 'application/json',
+						'Content-Type' : 'application/json'
+					},
+					body : JSON.stringify({ requests : [ {operation : { headLights : 'on'}} ] })
+				}).then(response => (response.ok ? alert("Head lights on") : alert("head lights error")))
+			}
+			return <button onClick={clickHandler}>Head Lights On</button>
+		}
+		const config = { config : { carConnection : { ssid: 'REMOTE45cfsc', password : 'fhcm852767', host : '192.168.8.46', port : 8080} } }	
 		//Status.bind(this)
 		const connect = () => 
-			fetch('/connect', {
+			fetch(API_PREFIX + '/connect', {
 				method : 'POST',
 				headers : {
 					'Accept' : 'application/json',
@@ -70,9 +85,10 @@ export default class App extends Component {
 		const changed = soc => this.setState({ soc: soc })
 		return (
 			<div>
-				<Config config={config} wifiUpdate={this.wifiUpdate} sendRegister={this.sendRegister}></Config>
-				<button onClick={connect}>Connect</button>
+				<Config config={config} configUpdate={this.configUpdate} sendRegister={this.sendRegister}></Config>
+				<button onClick={connect}>ConnectXXX</button>
 				<AirCon></AirCon><Status soc={this.state.soc} changed={changed.bind(this)}></Status><div>Battery {this.state.soc}</div>
+				<HeadLights></HeadLights>
 			</div>
 		)
 	}

@@ -30,6 +30,8 @@ static esp_err_t wifi_client_event_handler(void *ctx, system_event_t *event)
         ESP_LOGI(APP_TAG, "station:"MACSTR" join, AID=%d",
             MAC2STR(event->event_info.sta_connected.mac),
         event->event_info.sta_connected.aid);
+        //if(httpd_start(&server, &config) == ESP_OK)
+        //((httpd_handle_t) ctx)
         xEventGroupSetBits(wifi_event_group, AP_CONNECTED_BIT);
         
         break;
@@ -52,7 +54,7 @@ static esp_err_t wifi_client_event_handler(void *ctx, system_event_t *event)
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
                auto-reassociate. */
-        //esp_wifi_connect();
+        esp_wifi_connect();
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         //esp_restart();
         break;
@@ -63,13 +65,13 @@ static esp_err_t wifi_client_event_handler(void *ctx, system_event_t *event)
     return ESP_OK;
 }
 
-void wifi_client_setup(void)
+void wifi_client_setup(void * arg)
 {
     //uint8_t new_mac[8] = {0x24, 0x0d, 0xc2, 0xc2, 0x91, 0x85};
     //esp_base_mac_addr_set(new_mac);
     //vTaskDelay(100 / portTICK_PERIOD_MS);
     wifi_event_group = xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_event_loop_init(wifi_client_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_loop_init(wifi_client_event_handler, arg));
 
 }
 

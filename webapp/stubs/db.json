@@ -1,28 +1,30 @@
 {
-  "status": {
-    "status": {
-      "battery": {
-        "soc": 59,
-        "charging": true,
-        "chargeType": null,
-        "remaining": 90
-      },
-      "syncTime": 11
-    }
+  "status" : {
+      "status": {
+        "battery": {
+          "soc": 59,
+          "charging": true,
+          "chargeType": null,
+          "remaining": 90
+        },
+        "syncTime": 11
+      }
   },
   "operation": {
     "requests": [
       {
         "operation": {
-          "aircon": "on"
+          "headLights": "on"
         }
       }
     ]
   },
   "config": {
     "carConnection": {
-      "ssid": "REMOTE45cfsc",
-      "password": "fhcm852767"
+      "ssid": "REMOTE45",
+      "password": "bob",
+      "host": "192.168.8.47",
+      "port": "8081"
     }
   },
   "register": {},

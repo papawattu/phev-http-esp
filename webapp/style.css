@@ -1,9 +1,13 @@
 html, body {
 	font: 14px/1.21 'Helvetica Neue', arial, sans-serif;
 	font-weight: 400;
-	display: flex;
+	padding: 0;
+	margin: 0;
 }
 
 h1 {
 	text-align: center;
+}
+button {
+	margin : 10px;
 }
