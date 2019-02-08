@@ -5,7 +5,7 @@
 #define MAX_WIFI_CLIENT_SSID_LEN 32
 #define MAX_WIFI_CLIENT_PASSWORD_LEN 64
 
-#define AP_WIFI_SSID      "PHEV_REMOTE"
+#define AP_WIFI_SSID      "PHEV_REMOTE_2"
 #define AP_WIFI_PASS      "Password123"
 #define AP_MAX_STA_CONN   3
 

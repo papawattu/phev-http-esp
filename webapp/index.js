@@ -36,7 +36,7 @@ export default class App extends Component {
 		}
 		this.sendRegister = () => {
 			console.log('Register')
-			fetch(API_PREFIX + '/register', {
+			fetch(API_PREFIX + '/registration', {
 				method : 'POST',
 				headers : {
 					'Accept' : 'application/json',

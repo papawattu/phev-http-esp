@@ -4,7 +4,7 @@ export default (config, env, helpers) => {
       proxy: [
         {
           path: '/api/**',
-          target: 'http://localhost:3000/',
+          target: 'http://carpi/',
           // ...any other stuff...
         }
       ]
