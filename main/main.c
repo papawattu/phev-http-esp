@@ -73,15 +73,12 @@ void msg_http_incomingHandlerAsync(messagingClient_t *client, message_t *message
 #define MIME_TYPE_JSON "application/json"
 #define MAX_HTTP_RECV_BUFFER_SIZE 2048
 
-phevServiceCtx_t *serviceCtx = NULL;
 
 esp_err_t phev_http_operation_handler(httpd_req_t *req)
 {
     const char *OK = "{ \"status\" : \"ok\" }";
 
     phevServiceCtx_t *ctx = (phevServiceCtx_t *)req->user_ctx;
-
-    LOG_I(TAG, "Correct ctx %s", (ctx == serviceCtx ? "Correct" : "Incorrect"));
 
     size_t recv_size = req->content_len;
 
@@ -106,7 +103,7 @@ esp_err_t phev_http_operation_handler(httpd_req_t *req)
 
     message_t *message = msg_utils_createMsg((uint8_t *)content, recv_size);
 
-    msg_http_incomingHandlerAsync(serviceCtx->pipe->pipe->in, message);
+    msg_http_incomingHandlerAsync(ctx->pipe->pipe->in, message);
 
     httpd_resp_set_type(req, MIME_TYPE_JSON);
     httpd_resp_send(req, OK, strlen(OK));
@@ -183,9 +180,9 @@ esp_err_t phev_http_registration_handler(httpd_req_t *req)
     const uint8_t mac[] = {0, 0, 0, 0, 0, 0};
     LOG_I(TAG, "Sent response");
 
-    connectionDetails_t *details = (connectionDetails_t *)req->user_ctx;
+//    connectionDetails_t *details = (connectionDetails_t *)req->user_ctx;
 
-    serviceCtx = createServiceCtx(req->handle, mac, true, details->host, details->port);
+    //serviceCtx = createServiceCtx(req->handle, mac, true, details->host, details->port);
 
     xEventGroupSetBits(main_event_group, START_BIT);
 
@@ -202,14 +199,6 @@ esp_err_t phev_http_connect_handler(httpd_req_t *req)
 {
     const char *OK = "{ \"status\" : \"ok\" }";
     const char *ERROR = "{ \"status\" : \"error\" }";
-    const uint8_t mac[] = {0, 0, 0, 0, 0, 0};
-
-    connectionDetails_t *details = (connectionDetails_t *)req->user_ctx;
-
-    LOG_I(TAG, "host %s port %d", details->host, details->port);
-
-    serviceCtx = createServiceCtx(req->handle, mac, false, details->host, details->port);
-
     xEventGroupSetBits(main_event_group, START_BIT);
 
     httpd_resp_set_type(req, MIME_TYPE_JSON);
@@ -246,7 +235,7 @@ void generate_async_resp(void *arg)
 
     free(arg);
 }
-void sendErrorJson(httpd_req_t *req, const char * error)
+esp_err_t sendErrorJson(httpd_req_t *req, const char * error)
 {
     const char *ERROR = "{ \"error\" : %s }";
     char * resp = NULL;
@@ -255,35 +244,66 @@ void sendErrorJson(httpd_req_t *req, const char * error)
     
     httpd_resp_set_type(req, MIME_TYPE_JSON);
     httpd_resp_send(req, resp, strlen(resp));
-
+    return ESP_OK;
 }
 esp_err_t phev_http_get_registers_handler(httpd_req_t *req)
 {
 
     const char *OK = "{ \"status\" : \"ok\" }";
+    const char *STATUS_ERROR = "{ \"error\" : \"Cannot get register\" }";
+    const char *REGISTER_EMPTY = "{ \"register\" : null }";
+   
+    phevServiceCtx_t *ctx = (phevServiceCtx_t *) req->user_ctx;
 
+    if(!ctx) 
+    {
+        LOG_E(TAG,"Service context not set");
+        httpd_resp_set_type(req, MIME_TYPE_JSON);
+        httpd_resp_send(req, STATUS_ERROR, strlen(STATUS_ERROR));
+        return ESP_OK;
+        
+    }
+    
     LOG_I(TAG, "%s", req->uri);
 
-    if (req->uri[strlen(req->uri) - 1] == '/') {
-        LOG_I(TAG,"All registers");
-    } else {
-        char * pch=strrchr(req->uri,'/');
-        if(pch != NULL) {
-            if(pch == req->uri - 1)
+    char *pch = strrchr(req->uri, '/');
+    if (pch != NULL)
+    {
+        if (pch == req->uri - 1)
+        {
+            LOG_I(TAG, "All registers");
+            LOG_I(TAG, "Last char");
+        }
+        else
+        {
+            int reg = atoi(pch + 1);
+            if (reg != 0)
             {
-                LOG_I(TAG,"Last char");
-            } else {
-                int reg = atoi(pch+1);
-                if(reg != 0)
+                LOG_I(TAG, "Register %d", reg);
+                char * out = phev_service_getRegisterJson(ctx, reg);
+                
+                if(out)
                 {
-                    LOG_I(TAG,"Register %d",reg);
+                    LOG_I(TAG, "Register JSON %s", out);
+                    httpd_resp_set_type(req, MIME_TYPE_JSON);
+                    httpd_resp_send(req, out, strlen(out));
+                    return ESP_OK;
+
                 } else {
-                    LOG_E(TAG,"Register number not valid");
-                    sendErrorJson(req,"Register number not valid");
+                    LOG_I(TAG, "Register JSON returned nothing");
+                    httpd_resp_set_type(req, MIME_TYPE_JSON);
+                    httpd_resp_send(req, REGISTER_EMPTY, strlen(REGISTER_EMPTY));
+                    return ESP_OK;
                 }
+            }
+            else
+            {
+                LOG_E(TAG, "Register number not valid");
+                return sendErrorJson(req, "Register number not valid");
             }
         }
     }
+    
     httpd_resp_set_type(req, MIME_TYPE_JSON);
     httpd_resp_send(req, OK, strlen(OK));
 
@@ -292,31 +312,31 @@ esp_err_t phev_http_get_registers_handler(httpd_req_t *req)
 esp_err_t phev_http_status_handler(httpd_req_t *req)
 {
     const char *STATUS_ERROR = "{ \"error\" : \"Cannot get status\" }";
+   
     phevServiceCtx_t *ctx = (phevServiceCtx_t *)req->user_ctx;
 
-    LOG_I(TAG, "Correct ctx %s", (ctx == serviceCtx ? "Correct" : "Incorrect"));
-
-    if (serviceCtx)
+    if(!ctx) 
     {
-        const char *buffer = phev_service_statusAsJson(serviceCtx);
-        //LOG_I(TAG, "Battery level %d", phev_model_getRegister(serviceCtx->model, 29)->data[0]);
-        LOG_I(TAG, "Status request");
-        if (buffer)
-        {
-            LOG_I(TAG, "%s", buffer);
-            httpd_resp_set_type(req, MIME_TYPE_JSON);
-            httpd_resp_send(req, buffer, strlen(buffer));
-        }
-        else
-        {
-            httpd_resp_set_type(req, MIME_TYPE_JSON);
-            httpd_resp_send(req, STATUS_ERROR, strlen(STATUS_ERROR));
-        }
+        LOG_E(TAG,"Service context not set");
+        httpd_resp_set_type(req, MIME_TYPE_JSON);
+        httpd_resp_send(req, STATUS_ERROR, strlen(STATUS_ERROR));
+        return ESP_OK;
+        
+    }
+    //LOG_I(TAG, "Correct ctx %s", (ctx == serviceCtx ? "Correct" : "Incorrect"));
+
+    const char *buffer = phev_service_statusAsJson(ctx);
+    LOG_I(TAG, "Status request");
+    if (buffer)
+    {
+        LOG_I(TAG, "%s", buffer);
+        httpd_resp_set_type(req, MIME_TYPE_JSON);
+        httpd_resp_send(req, buffer, strlen(buffer));
     }
     else
     {
         httpd_resp_set_type(req, MIME_TYPE_JSON);
-        httpd_resp_send(req, "Error cant get status no context", strlen("Error cant get status no context"));
+        httpd_resp_send(req, STATUS_ERROR, strlen(STATUS_ERROR));
     }
 
     return ESP_OK;
@@ -371,6 +391,14 @@ esp_err_t phev_http_captdns_handler(httpd_req_t *req)
     httpd_resp_send(req, "\r\n", 2);
 
     return ESP_OK;
+}
+esp_err_t phev_http_reset_handler(httpd_req_t *req)
+{
+    const char *OK = "{ \"status\" : \"ok\" }";
+    httpd_resp_set_type(req, MIME_TYPE_JSON);
+    httpd_resp_send(req, OK, strlen(OK));
+    
+    esp_restart();
 }
 esp_err_t phev_http_root_handler(httpd_req_t *req)
 {
@@ -554,7 +582,7 @@ void createHandlers(httpd_handle_t server, connectionDetails_t **details)
 
     httpd_register_uri_handler(server, &phev_http_root);
     httpd_uri_t phev_http_get_config = {
-        .uri = "/config",
+        .uri = "/api/config",
         .method = HTTP_GET,
         .handler = phev_http_get_config_handler,
         .user_ctx = NULL,
@@ -562,7 +590,7 @@ void createHandlers(httpd_handle_t server, connectionDetails_t **details)
 
     httpd_register_uri_handler(server, &phev_http_get_config);
     httpd_uri_t phev_http_post_config = {
-        .uri = "/config",
+        .uri = "/api/config",
         .method = HTTP_POST,
         .handler = phev_http_post_config_handler,
         .user_ctx = details,
@@ -582,7 +610,7 @@ void createHandlers(httpd_handle_t server, connectionDetails_t **details)
 void register_handlers(httpd_handle_t server, phevServiceCtx_t * service)
 {
     httpd_uri_t phev_http_operation = {
-        .uri = "/operation",
+        .uri = "/api/operation",
         .method = HTTP_POST,
         .handler = phev_http_operation_handler,
         .user_ctx = service,
@@ -591,7 +619,7 @@ void register_handlers(httpd_handle_t server, phevServiceCtx_t * service)
     httpd_register_uri_handler(server, &phev_http_operation);
 
     httpd_uri_t phev_http_status = {
-        .uri = "/status",
+        .uri = "/api/status",
         .method = HTTP_GET,
         .handler = phev_http_status_handler,
         .user_ctx = service,
@@ -600,7 +628,7 @@ void register_handlers(httpd_handle_t server, phevServiceCtx_t * service)
     httpd_register_uri_handler(server, &phev_http_status);
 
     httpd_uri_t phev_http_get_registers = {
-        .uri = "/registers/*",
+        .uri = "/api/registers/*",
         .method = HTTP_GET,
         .handler = phev_http_get_registers_handler,
         .user_ctx = service,
@@ -611,31 +639,12 @@ void register_handlers(httpd_handle_t server, phevServiceCtx_t * service)
 }
 int msg_http_connect(messagingClient_t *client)
 {
-    LOG_I(TAG, "Http connect");
-    LOG_D(TAG, "Client %p", client);
-    http_ctx_t *ctx = (http_ctx_t *)client->ctx;
-    phevServiceCtx_t *service = (phevServiceCtx_t *)ctx->ctx;
-    LOG_D(TAG, "Ctx %p", ctx);
+    LOG_I(TAG, "Http connected");
+    
+    client->connected = 1;
+    
+    return 0;
 
-    if (!ctx->server)
-    {
-        ctx->server = start_webserver(NULL);
-
-        register_handlers(ctx->server, service);
-    }
-
-    if (ctx->server)
-    {
-
-        client->connected = 1;
-        return 0;
-    }
-    else
-    {
-        LOG_E(TAG, "Server not started");
-        client->connected = 0;
-        return -1;
-    }
 }
 void msg_http_incomingHandlerAsync(messagingClient_t *client, message_t *message)
 {
@@ -649,15 +658,15 @@ message_t *msg_http_incomingHandler(messagingClient_t *client)
 void msg_http_outgoingHandler(messagingClient_t *client, message_t *message)
 {
     //ESP_LOG_BUFFER_HEXDUMP(TAG,message->data,message->length,ESP_LOG_INFO);
-    if (((http_ctx_t *)client->ctx)->req)
-    {
-        LOG_I(TAG, "Stream %s", (char *)message->data);
-        httpd_resp_send_chunk(((http_ctx_t *)client->ctx)->req, (char *)message->data, message->length);
-    }
-    else
-    {
+    //if (((http_ctx_t *)client->ctx)->req)
+    //{
+    //    LOG_I(TAG, "Stream %s", (char *)message->data);
+    //    httpd_resp_send_chunk(((http_ctx_t *)client->ctx)->req, (char *)message->data, message->length);
+    //}
+    //else
+    //{
         //  LOG_I(TAG,"No Stream");
-    }
+    //}
 }
 
 messagingClient_t *msg_http_createHttpClient(httpSettings_t settings)
@@ -692,6 +701,9 @@ void phev_service_complete_callback(phevRegisterCtx_t *ctx)
 
 phevServiceCtx_t *createServiceCtx(httpd_handle_t server, const uint8_t *mac, bool registerDevice, const char *host, uint16_t port)
 {
+    
+    phevServiceCtx_t * serviceCtx = NULL;
+    
     httpSettings_t inSettings = {
         .server = server,
     };
@@ -749,12 +761,17 @@ phevServiceCtx_t *createServiceCtx(httpd_handle_t server, const uint8_t *mac, bo
 
         serviceCtx = phev_service_create(settings);
     }
+
+    in->ctx = serviceCtx;
+
     return serviceCtx;
 }
 
 void main_loop(void *args)
 {
-    phev_service_start(serviceCtx);
+    phevServiceCtx_t * ctx = (phevServiceCtx_t *) args;
+
+    phev_service_start(ctx);
 }
 void app_main()
 {
@@ -771,11 +788,9 @@ void app_main()
 
     LOG_I(TAG, "Init SPIFFS");
     initialise_spiffs();
-    connectionDetails_t *details;
+    connectionDetails_t * details = NULL;
 
     httpd_handle_t server = start_webserver(&details);
-
-    register_handlers(server, NULL);
 
     wifi_client_setup(server);
 
@@ -789,7 +804,7 @@ void app_main()
                         false, true, portMAX_DELAY);
 
     httpd_uri_t phev_http_registration = {
-        .uri = "/registration",
+        .uri = "/api/registration",
         .method = HTTP_POST,
         .handler = phev_http_registration_handler,
         .user_ctx = details,
@@ -798,7 +813,7 @@ void app_main()
     httpd_register_uri_handler(server, &phev_http_registration);
 
     httpd_uri_t phev_http_connect = {
-        .uri = "/connect",
+        .uri = "/api/connect",
         .method = HTTP_POST,
         .handler = phev_http_connect_handler,
         .user_ctx = details,
@@ -806,10 +821,28 @@ void app_main()
 
     httpd_register_uri_handler(server, &phev_http_connect);
 
+    httpd_uri_t phev_http_reset = {
+        .uri = "/api/reset",
+        .method = HTTP_GET,
+        .handler = phev_http_reset_handler,
+        .user_ctx = NULL,
+    };
+
+    httpd_register_uri_handler(server, &phev_http_reset);
+
+
     xEventGroupWaitBits(main_event_group, START_BIT,
                         false, true, portMAX_DELAY);
 
+    const uint8_t mac[] = {0, 0, 0, 0, 0, 0};
+
+    LOG_I(TAG, "host %s port %d", details->host, details->port);
+
+    phevServiceCtx_t * serviceCtx = createServiceCtx(server, mac, false, details->host, details->port);
+
+    register_handlers(server, serviceCtx);
+
     LOG_I(TAG, "PHEV service start");
 
-    xTaskCreate(main_loop, "main_task", 4096, NULL, 5, NULL);
+    xTaskCreate(main_loop, "main_task", 4096, (void *) serviceCtx, 5, NULL);
 }
